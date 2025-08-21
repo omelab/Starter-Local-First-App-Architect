@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  updatedAt DateTime  @updatedAt
+  createdAt DateTime  @default(now())
+  products  Product[]
+}
+
+model Product {
+  id                   Int                    @id @default(autoincrement())
+  sku                  String?                @unique
+  name                 String
+  price                Decimal                @db.Decimal(12, 2)
+  stock                Int                    @default(0)
+  imageUrl             String?
+  categoryId           Int
+  category             Category               @relation(fields: [categoryId], references: [id])
+  updatedAt            DateTime               @updatedAt
+  createdAt            DateTime               @default(now())
+  InventoryTransaction InventoryTransaction[]
+  OrderItem            OrderItem[]
+
+  @@index([categoryId])
+}
+
+model InventoryTransaction {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  change    Int // +in, -out
+  reason    String
+  refType   String? // 'order' | 'adjustment' | 'purchase' ...
+  refId     Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId, createdAt])
+}
+
+model Order {
+  id         Int         @id @default(autoincrement())
+  clientUuid String      @unique // idempotency key from client for offline sync
+  total      Decimal     @db.Decimal(12, 2)
+  status     String      @default("pending") // pending, paid, void
+  synced     Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  items      OrderItem[]
+  payments   Payment[]
+}
+
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  price     Decimal  @db.Decimal(12, 2) // unit price at sale time
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  order     Order    @relation(fields: [orderId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  method    String // cash, card, mobile
+  amount    Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+}
